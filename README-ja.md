@@ -18,13 +18,20 @@ JsoncPreserve は、コメント付き JSON（JSONC）のコメントや書式�
 
 ## インストール
 
-**NuGet.org にはまだ公開していません。** 公開後のコマンドは次の予定です。
+**0.1.0** は [NuGet.org](https://www.nuget.org/packages/JsoncPreserve/0.1.0) で公開しています。Visual Studio の NuGet マネージャから導入する場合:
+
+1. ソリューション エクスプローラーで利用先のプロジェクトを右クリックし、**NuGet パッケージの管理**を開きます。
+2. パッケージ ソースに **nuget.org** を選び、**参照**タブを開きます。
+3. **JsoncPreserve** を検索し、バージョン **0.1.0** を選んで **インストール**を押します。ライセンスの確認が表示された場合は内容を確認してください。
+4. プロジェクトの **依存関係 > パッケージ** に **JsoncPreserve** が表示されることを確認します。
+
+対応する対象フレームワークは .NET 8 と .NET 10 です。ライブラリの型を直接使うプロジェクトごとに追加してください。コマンドラインでは、利用先プロジェクトのディレクトリで次を実行します。
 
 ```sh
-dotnet add package JsoncPreserve
+dotnet add package JsoncPreserve --version 0.1.0
 ```
 
-現時点では `src/JsoncPreserve/JsoncPreserve.csproj` をプロジェクト参照するか、`dotnet pack -c Release` でローカルパッケージを作成してください。
+通常の導入ではパッケージ ソースに **nuget.org** を選んでください。GitHub Releases からはパッケージをダウンロードできます。GitHub Packages は別のフィードで、利用には GitHub の認証が必要です。
 
 ## 基本的な使い方
 

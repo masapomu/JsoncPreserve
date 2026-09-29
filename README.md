@@ -18,13 +18,20 @@ Changing `warmPoolSize` to `5` changes only the byte for `3`.
 
 ## Installation
 
-The package has **not yet been published** to NuGet.org. After publication, the command will be:
+Version **0.1.0** is published on [NuGet.org](https://www.nuget.org/packages/JsoncPreserve/0.1.0). In Visual Studio:
+
+1. Right-click the project that will use the library in Solution Explorer and select **Manage NuGet Packages**.
+2. Select **nuget.org** as the package source, then open the **Browse** tab.
+3. Search for **JsoncPreserve**, select version **0.1.0**, and click **Install**. Accept the license prompt if shown.
+4. Confirm that **JsoncPreserve** appears under the project's **Dependencies > Packages**.
+
+The library supports .NET 8 and .NET 10. Install it into each project that directly uses its types. From the command line, run this in the consuming project directory:
 
 ```sh
-dotnet add package JsoncPreserve
+dotnet add package JsoncPreserve --version 0.1.0
 ```
 
-For now, add a project reference to `src/JsoncPreserve/JsoncPreserve.csproj` or build the local package with `dotnet pack -c Release`.
+Use **nuget.org** as the source for normal installation. GitHub Releases provides a downloadable package archive, and GitHub Packages is a separate feed that requires GitHub authentication.
 
 ## Basic usage
 

@@ -1,0 +1,43 @@
+name: Publish GitHub release package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    if: github.event.release.tag_name == 'v0.1.0'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDKs
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Test Release build
+        run: dotnet test JsoncPreserve.sln --configuration Release --nologo
+
+      - name: Pack version 0.1.0
+        run: dotnet pack src/JsoncPreserve/JsoncPreserve.csproj --configuration Release --no-restore --nologo --output artifacts
+
+      - name: Add package to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" artifacts/JsoncPreserve.0.1.0.nupkg --clobber
+
+      - name: Publish to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: dotnet nuget push artifacts/JsoncPreserve.0.1.0.nupkg --api-key "$GITHUB_TOKEN" --source https://nuget.pkg.github.com/masapomu/index.json
