@@ -1,0 +1,50 @@
+name: Publish to NuGet.org
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    # Publish only the version committed on the default branch.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDKs
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Test Release build
+        run: dotnet test JsoncPreserve.sln --configuration Release --nologo
+
+      - name: Pack Release build
+        run: dotnet pack src/JsoncPreserve/JsoncPreserve.csproj --configuration Release --no-restore --nologo --output artifacts
+
+      - name: Check NuGet.org username
+        env:
+          NUGET_USER: ${{ vars.NUGET_USER }}
+        run: test -n "$NUGET_USER" || { echo 'Set the NUGET_USER repository variable to your NuGet.org username.' >&2; exit 1; }
+
+      # Request a short-lived publishing key after the build has succeeded.
+      - name: Sign in to NuGet.org
+        id: nuget_login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Publish package
+        env:
+          NUGET_API_KEY: ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push artifacts/JsoncPreserve.*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
