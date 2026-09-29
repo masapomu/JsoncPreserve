@@ -1,5 +1,7 @@
 # JsoncPreserve
 
+[English README](README.md)
+
 JsoncPreserve は、コメント付き JSON（JSONC）のコメントや書式を保ちながら編集する .NET ライブラリです。JSON の構文検証、値のシリアライズ、POCO 変換には `System.Text.Json` を使います。Node.js、Newtonsoft.Json には依存しません。
 
 ## 必要な理由

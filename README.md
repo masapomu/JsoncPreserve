@@ -1,5 +1,7 @@
 # JsoncPreserve
 
+[日本語のREADMEはこちら](README-ja.md)
+
 JsoncPreserve is a .NET library for editing JSON with comments (JSONC) while retaining the original text around each edit. It uses `System.Text.Json` for JSON parsing, serialization, and POCO conversion. It has no Node.js or Newtonsoft.Json dependency.
 
 ## Why?
