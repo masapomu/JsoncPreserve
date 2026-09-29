@@ -1,6 +1,6 @@
 # JsoncPreserve
 
-JsoncPreserve is a .NET library for editing JSON with comments (JSONC) while retaining the original text around each edit. It uses `System.Text.Json` for JSON parsing, serialization, and POCO conversion. It has no Glasswalk, Node.js, or Newtonsoft.Json dependency.
+JsoncPreserve is a .NET library for editing JSON with comments (JSONC) while retaining the original text around each edit. It uses `System.Text.Json` for JSON parsing, serialization, and POCO conversion. It has no Node.js or Newtonsoft.Json dependency.
 
 ## Why?
 
@@ -89,7 +89,7 @@ var options = new JsonSerializerOptions
 
 var file = JsoncFile<ServerConfig>.Load(path, options);
 file.Value.WarmPoolSize = 5;
-file.Save();
+file.Save(); // writes a temporary file, then replaces server.jsonc
 
 public sealed class ServerConfig
 {
@@ -109,6 +109,28 @@ The read/edit/write block changes from three lines to three lines; the POCO and 
 ```
 
 `JsoncFile<T>` serializes the POCO before and after editing, then applies changed paths to the original document. `JsonPropertyName`, `JsonIgnore`, converters, naming policies, enums, nullable values, collections, and nested POCOs are handled by `System.Text.Json`. Unknown source properties remain untouched. Use `JsoncDocument` when precise structural control matters.
+
+### Preview, custom persistence, and atomic saving
+
+```csharp
+var file = JsoncFile<ServerConfig>.Load("server.jsonc", options);
+file.Value.WarmPoolSize = 5;
+
+string preview = file.ToJsoncString(); // updated JSONC, no file write
+byte[] bytes = file.ToUtf8Bytes();      // UTF-8 output for a custom writer
+
+file.SaveAtomic(); // explicit form of Save()
+```
+
+Both preview methods leave the file and the in-memory change baseline untouched. As an alternative to `SaveAtomic()`, use an existing persistence function:
+
+```csharp
+file.SaveWith(WriteAtomic); // application method: void WriteAtomic(string path, byte[] bytes)
+```
+
+The callback must write the supplied bytes unchanged and throw if saving fails. The library updates its baseline only after the callback returns successfully. If you write preview bytes separately, reload the wrapper before subsequent edits.
+
+`Save()` and `SaveAtomic()` write a temporary file in the destination directory and replace the destination only after the write succeeds. `JsoncDocument.Save(path)` and `JsoncDocument.SaveAtomic(path)` use the same approach. On Unix, an existing file's mode is retained; the methods do not guarantee persistence across a machine crash.
 
 ## Round-trip preservation
 

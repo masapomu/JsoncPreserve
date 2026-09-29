@@ -44,15 +44,59 @@ public sealed class JsoncFile<T>
         return new JsoncFile<T>(path, JsoncDocument.Load(path, effective), effective);
     }
 
-    /// <summary>Applies POCO changes to the JSONC source and writes the file.</summary>
-    /// <remarks>Edits are prepared on a copy. A failed diff does not replace the in-memory document or write the file.</remarks>
-    public void Save()
+    /// <summary>Gets the JSONC bytes that would be saved for the current POCO.</summary>
+    /// <returns>A defensive copy of the updated UTF-8 bytes.</returns>
+    /// <remarks>This preview does not write a file or advance the in-memory change baseline.</remarks>
+    public byte[] ToUtf8Bytes() => Prepare().Candidate.ToUtf8Bytes();
+
+    /// <summary>Gets the JSONC text that would be saved for the current POCO.</summary>
+    /// <returns>The updated JSONC text.</returns>
+    /// <remarks>This preview does not write a file or advance the in-memory change baseline.</remarks>
+    public string ToJsoncString() => Prepare().Candidate.ToString();
+
+    /// <summary>Applies POCO changes and saves with a same-directory temporary file.</summary>
+    /// <remarks>A failed diff or file replacement does not advance the in-memory change baseline.</remarks>
+    public void Save() => SaveAtomic();
+
+    /// <summary>Applies POCO changes and atomically replaces the original file.</summary>
+    /// <remarks>The candidate is validated before writing; the in-memory baseline advances only after replacement succeeds.</remarks>
+    public void SaveAtomic()
+    {
+        var (candidate, current) = Prepare();
+        candidate.SaveAtomic(_path);
+        Accept(candidate, current);
+    }
+
+    /// <summary>Applies POCO changes using an application-provided persistence function.</summary>
+    /// <param name="write">
+    /// Function that writes the supplied bytes to the supplied path and throws on failure.
+    /// It must persist the bytes unchanged before returning.
+    /// </param>
+    /// <remarks>The in-memory document and diff baseline advance only after <paramref name="write"/> returns successfully.</remarks>
+    public void SaveWith(Action<string, byte[]> write)
+    {
+        ArgumentNullException.ThrowIfNull(write);
+        var (candidate, current) = Prepare();
+        write(_path, candidate.ToUtf8Bytes());
+        Accept(candidate, current);
+    }
+
+    /// <summary>Builds a validated candidate without changing the current document or snapshot.</summary>
+    /// <returns>The candidate and its serialized POCO snapshot.</returns>
+    private (JsoncDocument Candidate, JsonElement Current) Prepare()
     {
         var current = JsonSerializer.SerializeToElement(Value, _options);
         // Keep the original document untouched until every proposed edit validates.
         var candidate = JsoncDocument.Parse(Document.ToUtf8Bytes(), _options);
         Diff(_snapshot, current, [], candidate);
-        candidate.Save(_path);
+        return (candidate, current);
+    }
+
+    /// <summary>Accepts the validated candidate after its bytes have been persisted.</summary>
+    /// <param name="candidate">Document that was written.</param>
+    /// <param name="current">Serialized POCO state corresponding to the written bytes.</param>
+    private void Accept(JsoncDocument candidate, JsonElement current)
+    {
         Document = candidate;
         _snapshot = current.Clone();
     }

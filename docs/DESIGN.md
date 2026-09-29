@@ -7,12 +7,12 @@
 Exact no-op UTF-8 round trips; small replacements of existing values; predictable object and array insertion and deletion; direct use of `System.Text.Json` for JSON validation, values, and POCO conversion. Support comments, trailing commas, LF/CRLF, tabs, and spaces.
 
 ## Non-goals
-A new serializer, JSON5, schema validation, formatting whole files, and Glasswalk-specific behavior.
+A new serializer, JSON5, schema validation, formatting whole files, and application-specific behavior.
 
 ## Architecture and responsibilities
 `JsoncDocument` owns the original UTF-8 bytes. An internal index maps containers, properties, and array elements to byte spans. `Utf8JsonReader` validates syntax and supplies token positions, types, depths, and decoded property names. A small indexer pairs property names with values and records container membership; it does not reinterpret JSON values. `JsonSerializer` produces replacement value text and deserializes POCOs. After an edit, the index is rebuilt so subsequent edits use current positions.
 
-`JsoncFile<T>` loads a document and POCO. On save it serializes the POCO to `JsonElement`, compares it with the original semantic snapshot, and applies changed leaf values. Additions and removals use the document editor. This API is intentionally limited to ordinary object graphs; converters that change object shape or duplicate keys can make structural matching ambiguous. The low-level API is the definitive v1 editing surface.
+`JsoncFile<T>` loads a document and POCO. On save it serializes the POCO to `JsonElement`, compares it with the original semantic snapshot, and applies changed leaf values. Additions and removals use the document editor. Preview methods build the same candidate without writing or advancing the snapshot. `SaveWith` delegates persistence to an application callback and advances the snapshot only if it succeeds. This API is intentionally limited to ordinary object graphs; converters that change object shape or duplicate keys can make structural matching ambiguous. The low-level API is the definitive v1 editing surface.
 
 ## CST and trivia model
 Each indexed value has a start and end byte offset; containers hold ordered members. Properties also carry name token offsets. Comments are reader tokens with positions, retained in the original byte buffer. Whitespace, punctuation, and line endings remain in that buffer. No-op output is the same buffer, byte for byte, including a UTF-8 BOM. Offsets come from `TokenStartIndex` and `BytesConsumed`; the reader's `GetString` decodes property names. `ValueSpan` and `CurrentDepth` are available but are not needed because the reader supplies decoded names and parentage is established with a stack.
@@ -33,7 +33,7 @@ Unchanged bytes are never serialized. New members infer newline style from the f
 `JsoncFile<T>` clones supplied `JsonSerializerOptions`, enabling comment skipping and trailing commas for reading. It deserializes with `JsonSerializer`. Saving compares serialized JSON trees and patches differences. Existing source fields omitted by the POCO are preserved unless they correspond to a field in the initial serialized snapshot; this avoids deleting unknown settings. `JsonPropertyName`, naming policy, converters, enum converters, nullable values, and collections remain `System.Text.Json` concerns. Callers can use `JsoncDocument` for precise control.
 
 ## Error handling
-Malformed JSONC throws `JsonException` (including reader subclasses); invalid UTF-8 throws `DecoderFallbackException`; invalid paths or unsupported edits throw argument or invalid-operation exceptions. A candidate is validated before replacing the in-memory buffer. `JsoncFile<T>` applies a diff to a copy before writing the validated UTF-8 bytes.
+Malformed JSONC throws `JsonException` (including reader subclasses); invalid UTF-8 throws `DecoderFallbackException`; invalid paths or unsupported edits throw argument or invalid-operation exceptions. A candidate is validated before replacing the in-memory buffer. `JsoncFile<T>` applies a diff to a copy, writes it to a same-directory temporary file, and replaces the destination before advancing the snapshot. `JsoncDocument.Save` uses the same strategy. Replacement does not imply a machine-crash durability guarantee.
 
 ## Performance
 One reader pass builds the index. Each edit rebuilds it and copies the UTF-8 buffer, suitable for configuration files of a few KB to a few hundred KB. Bulk edits are O(edits × file size); future versions may batch non-overlapping spans.

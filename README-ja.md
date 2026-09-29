@@ -1,6 +1,6 @@
 # JsoncPreserve
 
-JsoncPreserve は、コメント付き JSON（JSONC）のコメントや書式を保ちながら編集する .NET ライブラリです。JSON の構文検証、値のシリアライズ、POCO 変換には `System.Text.Json` を使います。Glasswalk、Node.js、Newtonsoft.Json には依存しません。
+JsoncPreserve は、コメント付き JSON（JSONC）のコメントや書式を保ちながら編集する .NET ライブラリです。JSON の構文検証、値のシリアライズ、POCO 変換には `System.Text.Json` を使います。Node.js、Newtonsoft.Json には依存しません。
 
 ## 必要な理由
 
@@ -89,7 +89,7 @@ var options = new JsonSerializerOptions
 
 var file = JsoncFile<ServerConfig>.Load(path, options);
 file.Value.WarmPoolSize = 5;
-file.Save();
+file.Save(); // 一時ファイルを書いてから server.jsonc を置き換える
 
 public sealed class ServerConfig
 {
@@ -109,6 +109,28 @@ public sealed class ServerConfig
 ```
 
 `JsoncFile<T>` は編集前後の POCO をシリアライズして差分を元文書へ適用します。`JsonPropertyName`、`JsonIgnore`、コンバーター、命名規則、enum、nullable、コレクション、入れ子オブジェクトは `System.Text.Json` に委ねます。元ファイルにだけ存在する未知の項目は保持します。構造を厳密に制御する場合は `JsoncDocument` を使ってください。
+
+### 保存前の確認・独自保存処理・一時ファイル経由の保存
+
+```csharp
+var file = JsoncFile<ServerConfig>.Load("server.jsonc", options);
+file.Value.WarmPoolSize = 5;
+
+string preview = file.ToJsoncString(); // 保存せず変更後の JSONC を取得
+byte[] bytes = file.ToUtf8Bytes();      // 独自の保存処理に渡せる UTF-8
+
+file.SaveAtomic(); // Save() と同じ保存方式を明示
+```
+
+二つのプレビュー API はファイルにも内部の差分基準にも変更を加えません。`SaveAtomic()` の代わりに既存の保存関数を使う場合は次のように書けます。
+
+```csharp
+file.SaveWith(WriteAtomic); // アプリ側の関数: void WriteAtomic(string path, byte[] bytes)
+```
+
+この関数は渡されたバイト列をそのまま保存し、失敗時には例外を投げる必要があります。ライブラリは正常終了後だけ差分基準を更新します。プレビューのバイト列を別途保存した場合は、次の編集前にファイルを読み直してください。
+
+`Save()` と `SaveAtomic()` は保存先と同じディレクトリに一時ファイルを書き、書き込みが終わってから置き換えます。`JsoncDocument.Save(path)` と `JsoncDocument.SaveAtomic(path)` も同じ方式です。Unix では既存ファイルのモードを引き継ぎますが、マシン停止時の永続性は保証しません。
 
 ## ラウンドトリップ保証
 

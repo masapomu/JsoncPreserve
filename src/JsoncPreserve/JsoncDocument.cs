@@ -71,9 +71,40 @@ public sealed class JsoncDocument
         return JsonSerializer.Deserialize<T>(_source.AsSpan(offset), read);
     }
 
-    /// <summary>Writes the current UTF-8 bytes to a file.</summary>
+    /// <summary>Saves the current UTF-8 bytes using a temporary file in the destination directory.</summary>
     /// <param name="path">Destination path.</param>
-    public void Save(string path) => File.WriteAllBytes(path, _source);
+    /// <remarks>The temporary file is moved over the destination after the write succeeds.</remarks>
+    public void Save(string path) => SaveAtomic(path);
+
+    /// <summary>Saves the current UTF-8 bytes using a same-directory temporary file and replacement.</summary>
+    /// <param name="path">Destination path.</param>
+    /// <remarks>
+    /// On Unix, the existing file mode is copied to the temporary file before replacement.
+    /// This method does not provide a durability guarantee against a machine crash.
+    /// </remarks>
+    public void SaveAtomic(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        string destination = Path.GetFullPath(path);
+        string directory = Path.GetDirectoryName(destination)!;
+        Directory.CreateDirectory(directory);
+        string temporary = Path.Combine(directory,
+            "." + Path.GetFileName(destination) + "." + Guid.NewGuid().ToString("N") + ".tmp");
+
+        try
+        {
+            // A same-directory move avoids exposing a partially written destination.
+            File.WriteAllBytes(temporary, _source);
+            if (!OperatingSystem.IsWindows() && File.Exists(destination))
+                File.SetUnixFileMode(temporary, File.GetUnixFileMode(destination));
+            File.Move(temporary, destination, true);
+        }
+        finally
+        {
+            // Keep the original destination and clean up if writing or replacement fails.
+            if (File.Exists(temporary)) File.Delete(temporary);
+        }
+    }
 
     /// <summary>Checks whether a property or array element exists at a path.</summary>
     /// <param name="path">Path to inspect; an empty path refers to the root.</param>

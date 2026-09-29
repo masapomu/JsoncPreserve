@@ -182,6 +182,107 @@ public sealed class DocumentTests
         finally { File.Delete(path); }
     }
 
+    [Fact]
+    public void PocoPreviewIsSideEffectFreeAndSaveIsAtomic()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "JsoncPreserve-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "settings.json");
+        try
+        {
+            const string source = "{\r\n  // keep\r\n  \"count\": 2\r\n}\r\n";
+            File.WriteAllText(path, source);
+            var file = JsoncFile<Config>.Load(path, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            file.Value.Count = 5;
+
+            const string expected = "{\r\n  // keep\r\n  \"count\": 5\r\n}\r\n";
+            byte[] preview = file.ToUtf8Bytes();
+            Assert.Equal(expected, Encoding.UTF8.GetString(preview));
+            Assert.Equal(expected, file.ToJsoncString());
+            Assert.Equal(source, File.ReadAllText(path));
+            Assert.Equal(source, file.Document.ToString());
+
+            preview[0] = (byte)'!';
+            Assert.Equal(expected, file.ToJsoncString());
+            file.SaveAtomic();
+            Assert.Equal(expected, File.ReadAllText(path));
+            Assert.Equal(expected, file.Document.ToString());
+            Assert.Single(Directory.GetFiles(directory));
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
+    public void FailedReplacementDoesNotAdvancePocoBaseline()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "JsoncPreserve-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "settings.json");
+        string backup = Path.Combine(directory, "backup.json");
+        try
+        {
+            File.WriteAllText(path, "{\"count\":2}");
+            var file = JsoncFile<Config>.Load(path, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            file.Value.Count = 5;
+            File.Move(path, backup);
+            Directory.CreateDirectory(path);
+
+            var error = Record.Exception(() => file.SaveAtomic());
+            Assert.True(error is IOException or UnauthorizedAccessException);
+            Assert.Equal("{\"count\":2}", file.Document.ToString());
+            Assert.Equal("{\"count\":5}", file.ToJsoncString());
+            Assert.Equal("{\"count\":2}", File.ReadAllText(backup));
+            Assert.Equal(2, Directory.GetFileSystemEntries(directory).Length);
+
+            Directory.Delete(path);
+            File.Move(backup, path);
+            file.Save();
+            Assert.Equal("{\"count\":5}", File.ReadAllText(path));
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
+    public void DocumentSaveAtomicRetainsOriginalText()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "JsoncPreserve-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "settings.json");
+        try
+        {
+            var doc = JsoncDocument.Parse("{\n  // keep\n  \"count\": 2\n}");
+            doc.Set("count", 5);
+            doc.SaveAtomic(path);
+            Assert.Equal(doc.ToUtf8Bytes(), File.ReadAllBytes(path));
+            Assert.Single(Directory.GetFiles(directory));
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
+    public void CustomWriterAdvancesBaselineOnlyAfterSuccess()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "JsoncPreserve-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "settings.json");
+        try
+        {
+            File.WriteAllText(path, "{\n  // keep\n  \"count\": 2\n}");
+            var file = JsoncFile<Config>.Load(path, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            file.Value.Count = 5;
+
+            Assert.Throws<IOException>(() => file.SaveWith((_, _) => throw new IOException("Writer failed.")));
+            Assert.Equal("{\n  // keep\n  \"count\": 2\n}", file.Document.ToString());
+            Assert.Equal("{\n  // keep\n  \"count\": 2\n}", File.ReadAllText(path));
+
+            file.SaveWith((destination, bytes) => File.WriteAllBytes(destination, bytes));
+            Assert.Equal("{\n  // keep\n  \"count\": 5\n}", file.Document.ToString());
+            file.Value.Count = 6;
+            Assert.Equal("{\n  // keep\n  \"count\": 6\n}", file.ToJsoncString());
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     private sealed class Config
     {
         public Level Level { get; set; }
